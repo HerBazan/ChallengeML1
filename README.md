@@ -65,21 +65,30 @@ Para soportar este volumen, la estrategia recomendada combina:
 
 ```mermaid
 flowchart LR
-    U[Clientes / Comercios] --> LB[Load Balancer]
-    LB --> G1[API Gateway - instancia 1]
-    LB --> G2[API Gateway - instancia 2]
-    LB --> G3[API Gateway - instancia N]
+    U[Clientes Web/Mobile] --> LB[Load Balancer]
+    LB --> A1[ProductCatalog.WebApi - instancia 1]
+    LB --> A2[ProductCatalog.WebApi - instancia 2]
+    LB --> AN[ProductCatalog.WebApi - instancia N]
 
-    G1 --> F[Fraud Detection Service (Stateless)]
-    G2 --> F
-    G3 --> F
+    A1 --> CQRS[CQRS Handlers en ProductCatalog.Application]
+    A2 --> CQRS
+    AN --> CQRS
 
-    F --> R[Rule Engine Cluster]
-    R --> C[(Redis Cache)]
-    R --> ES[(Event Streaming: Kafka/Pulsar)]
-    ES --> W[Workers de evaluación/persistencia]
-    W --> DB[(PostgreSQL Cluster)]
+    CQRS --> RC[(Redis Cache de consultas)]
+    CQRS --> BUS[(Event Streaming: Kafka/Pulsar)]
+    CQRS --> WR[(PostgreSQL Writer)]
+
+    BUS --> WK[Workers de proyección/indexación]
+    WK --> RR[(PostgreSQL Read Replicas)]
+
+    RC --> CMP[GET /api/products/compare]
+    RR --> CMP
 ```
+
+- Las escrituras (`POST/PUT/DELETE`) van al **writer** y publican eventos.
+- Las lecturas de alta frecuencia (`GET` y `compare`) priorizan **Redis + read replicas** para sostener alto TPS.
+- El escalado horizontal ocurre en `ProductCatalog.WebApi` por ser stateless.
+
 
 ## CRUD de productos
 
