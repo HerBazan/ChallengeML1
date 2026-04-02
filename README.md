@@ -1,16 +1,144 @@
-# ProductCatalog - Clean Architecture + CQRS (.NET)
+# ProductCatalog API
 
-Solución ASP.NET Core Web API con arquitectura limpia y patrón CQRS para la entidad `Product`.
+Implementación de **Clean Architecture + CQRS** en **.NET 8** para gestión y comparación dinámica de productos.
 
-## Estructura
+## 1. Overview
 
-- `ProductCatalog.Domain`: entidades de dominio.
-- `ProductCatalog.Application`: contratos (repository/service), CQRS (commands, queries, handlers), DTOs.
-- `ProductCatalog.Infrastructure`: EF Core + SQLite, repositorio y servicio.
-- `ProductCatalog.WebApi`: controlador REST y configuración del host.
+ProductCatalog es una API REST enfocada en:
+- gestión de productos (CRUD),
+- comparación dinámica de múltiples productos por atributos seleccionables,
+- diseño mantenible y extensible para escenarios de evolución técnica.
 
+## 2. Architecture
 
-## Mapa de módulos y capas del desarrollo (cómo leerlo)
+El proyecto separa la lógica de negocio de la infraestructura siguiendo Clean Architecture:
+
+```text
+src/
+ ├── ProductCatalog.WebApi
+ ├── ProductCatalog.Application
+ ├── ProductCatalog.Domain
+ └── ProductCatalog.Infrastructure
+```
+
+### Capas
+
+**Domain**
+- Núcleo de negocio (entidades y reglas).
+- Sin dependencias de frameworks de infraestructura.
+
+**Application**
+- Casos de uso y flujo CQRS (commands, queries, handlers, DTOs).
+- Orquestación de lógica de aplicación.
+
+**Infrastructure**
+- Persistencia y componentes técnicos.
+- EF Core + SQLite para almacenamiento del challenge.
+
+**WebApi**
+- Entrada HTTP (controllers, middleware, DI, Swagger).
+
+### Flujo de ejecución
+
+```text
+HTTP Request
+   ↓
+Controller (WebApi)
+   ↓
+Command / Query Handler (Application)
+   ↓
+Domain
+   ↓
+Infrastructure (Database)
+```
+
+## 3. Tech stack
+
+| Componente | Tecnología |
+|---|---|
+| Runtime | .NET 8 |
+| API Framework | ASP.NET Core Web API |
+| Arquitectura | Clean Architecture |
+| Persistencia | Entity Framework Core + SQLite |
+| Testing | xUnit + WebApplicationFactory |
+| API Docs | Swagger / OpenAPI |
+
+En este proyecto .NET se usa **`WebApplicationFactory<Program>`**, para pruebas de integración end-to-end de la API.
+
+## 4. Main endpoints
+
+Base path: `/api/products`
+
+### CRUD de productos
+
+| Método | Endpoint | Descripción |
+|---|---|---|
+| GET | `/api/products` | Lista productos |
+| GET | `/api/products/{id}` | Obtiene un producto por id |
+| POST | `/api/products` | Crea producto |
+| PUT | `/api/products/{id}` | Actualiza producto |
+| DELETE | `/api/products/{id}` | Elimina producto |
+
+### Comparación dinámica de productos
+
+`GET /api/products/compare`
+
+Permite comparar múltiples productos en una sola llamada y elegir qué atributos devolver.
+
+#### Parámetros
+
+- `ids` (**requerido**): GUIDs separados por coma.
+  - mínimo: 2
+  - máximo: 10
+- `fields` (opcional): lista de campos a comparar.
+  - si no se especifica, se aplica set por defecto.
+
+#### Campos permitidos
+
+`description`, `imageUrl`, `price`, `rating`, `size`, `weight`, `color`, `specifications`, `batteryCapacity`, `cameraSpecifications`, `memory`, `storageCapacity`, `brand`, `modelVersion`, `operatingSystem`
+
+#### Ejemplo de request
+
+```bash
+curl "https://localhost:5001/api/products/compare?ids=11111111-1111-1111-1111-111111111111,22222222-2222-2222-2222-222222222222&fields=price,rating,batteryCapacity"
+```
+
+#### Ejemplo de respuesta
+
+```json
+{
+  "fields": ["price", "rating", "batteryCapacity"],
+  "items": [
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "Smartphone X",
+      "attributes": {
+        "price": 999.99,
+        "rating": 4.7,
+        "batteryCapacity": "5000mAh"
+      }
+    },
+    {
+      "id": "22222222-2222-2222-2222-222222222222",
+      "name": "Smartphone Y",
+      "attributes": {
+        "price": 849.99,
+        "rating": 4.5,
+        "batteryCapacity": "4600mAh"
+      }
+    }
+  ]
+}
+```
+
+## 5. Design decisions
+
+- **Modelo híbrido común + specifications** para mantener el diseño extensible.
+- **Filtrado por `fields`** para traer solo atributos relevantes en comparación.
+- **Manejo global de errores** en middleware (traducción consistente a HTTP status).
+- **Persistencia simulada/local** para facilitar ejecución del challenge.
+
+### Mapa de módulos y capas
 
 ```mermaid
 flowchart TB
@@ -21,25 +149,48 @@ flowchart TB
     I --> DB[(SQLite / AppDbContext)]
 ```
 
-- **WebApi**: capa de entrada HTTP (controllers, middleware, configuración del host).
-- **Application**: casos de uso CQRS, DTOs y dispatchers (orquestación).
-- **Domain**: reglas/entidades de negocio puras.
-- **Infrastructure**: persistencia y servicios técnicos (EF Core, repositorios).
-- **Lectura del flujo**: izquierda a derecha/arriba abajo → request entra por WebApi, Application ejecuta lógica, y Infrastructure resuelve I/O (DB).
+- **WebApi**: capa de entrada HTTP.
+- **Application**: casos de uso CQRS y orquestación.
+- **Domain**: reglas de negocio puras.
+- **Infrastructure**: persistencia y componentes técnicos.
 
-## Observabilidad básica (challenge)
+### Observabilidad básica
 
-1. **Correlation ID por request (trazabilidad mínima)**
-   - Leer/generar `X-Correlation-Id` en middleware.
-   - Propagarlo en logs y devolverlo en el response header para seguimiento end-to-end.
+1. Correlation ID por request (`X-Correlation-Id`) para trazabilidad.
+2. Logging estructurado (campos sugeridos: `timestamp`, `level`, `path`, `method`, `statusCode`, `elapsedMs`, `exception`).
+3. Log de inicio/fin de request con latencia para detectar cuellos de botella.
 
-2. **Logging estructurado en JSON**
-   - Estandarizar logs con campos: `timestamp`, `level`, `correlationId`, `path`, `method`, `statusCode`, `elapsedMs`, `exception`.
-   - Facilita búsquedas, dashboards y alertas.
+### Manejo de errores
 
-3. **Log de inicio/fin de request con latencia**
-   - Registrar un log al inicio y otro al final de cada request.
-   - Medir `elapsedMs` para detectar endpoints lentos (p95/p99) rápidamente.
+- `InvalidOperationException` -> `400 Bad Request`
+- `KeyNotFoundException` -> `404 Not Found`
+- `Exception` -> `500 Internal Server Error`
+
+Casos típicos:
+- campo inválido en `fields` -> `400`
+- IDs inexistentes -> `404`
+- más de 10 IDs para comparar -> `400`
+
+## 6. Run instructions
+
+```bash
+dotnet restore
+dotnet run --project src/ProductCatalog.WebApi
+```
+
+Swagger disponible en: `/swagger` (Development).
+
+## 7. Testing
+
+```bash
+dotnet test
+```
+
+Incluye:
+- unit tests para lógica de comparación,
+- integration tests HTTP del endpoint `/api/products/compare` con `WebApplicationFactory<Program>`.
+
+## 8. Future improvements
 
 ## Escalabilidad (objetivo: 100k transacciones por segundo)
 
@@ -88,122 +239,3 @@ flowchart LR
 - Las escrituras (`POST/PUT/DELETE`) van al **writer** y publican eventos.
 - Las lecturas de alta frecuencia (`GET` y `compare`) priorizan **Redis + read replicas** para sostener alto TPS.
 - El escalado horizontal ocurre en `ProductCatalog.WebApi` por ser stateless.
-
-
-## CRUD de productos
-
-Endpoints disponibles en `api/products`:
-
-- `GET /api/products`
-- `GET /api/products/{id}`
-- `GET /api/products/compare?ids={id1},{id2}&fields=price,rating,color`
-- `POST /api/products`
-- `PUT /api/products/{id}`
-- `DELETE /api/products/{id}`
-
-`fields` es opcional en `compare`. Si se omite, la API devuelve un set por defecto de campos útiles para comparación.
-
-## Comparación de productos (`GET /api/products/compare`)
-
-### Parámetros
-
-- `ids` (**obligatorio**): lista de GUIDs separada por coma.
-  - Mínimo: 2 IDs.
-  - Máximo: 10 IDs.
-- `fields` (opcional): lista de campos separada por coma.
-  - Si no se envía, se usan campos por defecto.
-
-### Campos permitidos en `fields`
-
-`description`, `imageUrl`, `price`, `rating`, `size`, `weight`, `color`, `specifications`, `batteryCapacity`, `cameraSpecifications`, `memory`, `storageCapacity`, `brand`, `modelVersion`, `operatingSystem`
-
-### Campos por defecto (cuando `fields` no se envía)
-
-`description`, `imageUrl`, `price`, `rating`, `size`, `weight`, `color`, `specifications`
-
-### Ejemplo de request (curl)
-
-```bash
-curl "https://localhost:5001/api/products/compare?ids=11111111-1111-1111-1111-111111111111,22222222-2222-2222-2222-222222222222&fields=price,rating,batteryCapacity"
-```
-
-### Ejemplo de response `200 OK`
-
-```json
-{
-  "fields": ["price", "rating", "batteryCapacity"],
-  "items": [
-    {
-      "id": "11111111-1111-1111-1111-111111111111",
-      "name": "Smartphone X",
-      "attributes": {
-        "price": 999.99,
-        "rating": 4.7,
-        "batteryCapacity": "5000mAh"
-      }
-    },
-    {
-      "id": "22222222-2222-2222-2222-222222222222",
-      "name": "Smartphone Y",
-      "attributes": {
-        "price": 849.99,
-        "rating": 4.5,
-        "batteryCapacity": "4600mAh"
-      }
-    }
-  ]
-}
-```
-
-### ¿Qué pasa en casos inválidos?
-
-- **Campo inválido en `fields`** (ej. `fields=price,noExiste`)  
-  Respuesta: `400 Bad Request` con mensaje de validación indicando cuáles campos no están permitidos.
-- **Producto inexistente en `ids`** (GUID válido pero no encontrado)  
-  Respuesta: `404 Not Found` con mensaje indicando qué IDs no existen.
-- **Más de 10 IDs en `ids`**  
-  Respuesta: `400 Bad Request` indicando el máximo permitido para comparación.
-
-## Base de datos
-
-Se usa SQLite con connection string:
-
-```json
-"DefaultConnection": "Data Source=productcatalog.db"
-```
-
-Al iniciar la API se ejecuta `Database.EnsureCreated()` para crear la base si no existe.
-Además, se cargan productos de ejemplo automáticamente si la tabla está vacía.
-
-## Ejecutar
-
-```bash
-dotnet restore
-dotnet run --project src/ProductCatalog.WebApi
-```
-
-Swagger queda disponible en `/swagger` en entorno Development.
-
-## Ejecutar tests
-
-```bash
-dotnet test
-```
-
-Incluye:
-- unit tests de `CompareProductsQueryHandler`.
-- integration tests HTTP del endpoint `/api/products/compare` usando `WebApplicationFactory<Program>`.
-
-## Manejo de errores
-
-La API utiliza un middleware global para transformar excepciones comunes a respuestas HTTP:
-
-- `InvalidOperationException` -> `400 Bad Request`
-- `KeyNotFoundException` -> `404 Not Found`
-- `Exception` -> `500 Internal Server Error`
-
-## Decisiones de diseño (challenge)
-
-- La comparación se resuelve por query params: `ids` (obligatorio) y `fields` (opcional).
-- Si `fields` no se envía, el backend responde con un set por defecto de atributos de comparación.
-- Se valida que existan al menos 2 productos para comparar y que todos los `ids` existan.
