@@ -1,0 +1,44 @@
+# Build results
+[Dd]ebug/
+[Rr]elease/
+[Bb]in/
+[Oo]bj/
+out/
+
+# Visual Studio / VS Code
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Rider / ReSharper
+.idea/
+_ReSharper*/
+*.DotSettings.user
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+!packages/build/
+
+# .NET tooling
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Logs
+*.log
+
+# Test output
+TestResults/
+*.trx
+
+# ASP.NET / IIS Express
+wwwroot/lib/
+
+# OS files
+.DS_Store
+Thumbs.db
